@@ -155,8 +155,8 @@ data:
         max_frames_per_sequence: ${debug_val_max_frames_per_sequence}
         
 exp_name: mamma_harmony4d_concat_mask_dpt_temporal_rel_root
-mamma_compose_root: /dataset/mamma_compose
-harmony4d_compose_root: /dataset/mamma_harmony4d_compose
+mamma_compose_root: /work/crayon715/mamma_compose
+harmony4d_compose_root: /work/crayon715/mamma_harmony4d_compose
 debug_max_sequences: null
 debug_max_frames_per_sequence: null
 debug_val_max_sequences: null
@@ -272,14 +272,14 @@ checkpoint:
   save_dir: logs/${exp_name}/ckpts
   save_freq: 1
   save_step_freq: 5000
-  resume_checkpoint_path: /Multi_SMPL_Temporal/logs/mamma_harmony4d_concat_mask_dpt_temporal_rel/ckpts/checkpoint_5.pt
+  resume_checkpoint_path: /work/crayon715/checkpoint_30.pt
   strict: false
   load_aggregator_only: false
   load_model_only: true
-  init_mask_trunk_from_depth: /Multi_SMPL_Temporal/logs/mamma_harmony4d_concat_mask_dpt_temporal_rel/ckpts/checkpoint_5.pt
+  init_mask_trunk_from_depth: /work/crayon715/checkpoint_30.pt
 loss:
   _target_: loss.MultitaskLoss
-  smplx_model_dir: /dataset/smplx_models
+  smplx_model_dir: /work/crayon715/smplx_models
   camera:
     weight: 5.0
     loss_type: l1
