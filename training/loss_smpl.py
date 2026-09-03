@@ -218,12 +218,17 @@ def compute_temporal_smpl_smoothness(
 
     Local pose / mesh translation default to prediction-only smoothness priors
     (the finite difference is driven to zero). ``pose_use_gt_delta`` and
-    ``mesh_translate_use_gt_delta`` switch them to the same relative-motion
-    supervision the root uses: the target of the finite difference becomes GT's
-    own finite difference instead of zero, so real articulation and real
-    translation are no longer penalized. The operator, order and weight scale
-    are unchanged, so the GT-delta form degenerates to the smoothness form
-    wherever GT is already static.
+    ``mesh_translate_use_gt_delta`` switch them to GT relative-motion
+    supervision, so real articulation and real translation stop being penalized:
+
+    * pose adopts the root formulation verbatim -- per-joint relative SO(3)
+      motion (``_relative_motion``) compared against GT's by geodesic angle.
+      Note this changes the term's units from rotmat-L1 to radians (~2.9x
+      larger at frame-to-frame angles), so ``weight_pose`` is no longer
+      calibrated the same way as in the smoothness form.
+    * mesh translation lives in R^3, where the linear finite difference already
+      *is* the relative motion; only its target changes from zero to GT's own
+      finite difference, leaving units and weight scale untouched.
     """
     pred_pose = predictions["smpl_pose"]
     zero = pred_pose.sum() * 0.0
@@ -259,6 +264,29 @@ def compute_temporal_smpl_smoothness(
             )
         raise ValueError(f"Unsupported temporal order: {order}")
 
+    def _relative_motion(rot, order):
+        """Relative SO(3) motion over the finite-difference stencil.
+
+        ``order=1`` is the frame-to-frame velocity ``R_t^T R_{t+1}``; ``order=2``
+        composes two velocities, the SO(3) analogue of an acceleration. Shared by
+        the root term and by the GT-delta pose term so both measure motion the
+        same way.
+        """
+        if T < 2:
+            return None, None
+        velocity = rot[:, :-1].transpose(-1, -2) @ rot[:, 1:]
+        mask = valid[:, :-1] * valid[:, 1:]
+        if order == 1:
+            return velocity, mask
+        if order == 2:
+            if T < 3:
+                return None, None
+            return (
+                velocity[:, :-1].transpose(-1, -2) @ velocity[:, 1:],
+                mask[:, :-1] * mask[:, 1:],
+            )
+        raise ValueError(f"Unsupported temporal order: {order}")
+
     def _reduce(diff, mask, feature_dims):
         if diff is None:
             return zero
@@ -275,8 +303,9 @@ def compute_temporal_smpl_smoothness(
     pose_slice = slice(3 if exclude_root else 0, 72)
     pose = pred_pose[:, :P, pose_slice].reshape(B, T, P, -1)
     pose_rot = axis_angle_to_rotmat(pose)
-    pose_diff, pose_mask = _difference(pose_rot, int(pose_order))
-    if pose_use_gt_delta and pose_diff is not None:
+    if pose_use_gt_delta:
+        # Same formulation as the root term: compare relative SO(3) motion
+        # against GT's relative SO(3) motion, per joint, as a geodesic angle.
         gt_pose_all = batch.get("smpl_pose")
         if gt_pose_all is None:
             raise KeyError(
@@ -285,13 +314,24 @@ def compute_temporal_smpl_smoothness(
         gt_pose_local = gt_pose_all[:, :P, pose_slice].reshape(B, T, P, -1).to(
             device=pose.device, dtype=pose.dtype
         )
-        gt_pose_diff, _ = _difference(
+        pred_motion, pose_mask = _relative_motion(pose_rot, int(pose_order))
+        gt_motion, _ = _relative_motion(
             axis_angle_to_rotmat(gt_pose_local), int(pose_order)
         )
-        pose_diff = pose_diff - gt_pose_diff
-    result["loss_smpl_temporal_pose"] = _reduce(
-        pose_diff, pose_mask, feature_dims=(-1, -2, -3)
-    )
+        pose_value = (
+            None
+            if pred_motion is None
+            else rotation_geodesic_angle(pred_motion, gt_motion)
+        )
+        # (B,T',P,J) geodesic angles -> average over joints only.
+        result["loss_smpl_temporal_pose"] = _reduce(
+            pose_value, pose_mask, feature_dims=-1
+        )
+    else:
+        pose_diff, pose_mask = _difference(pose_rot, int(pose_order))
+        result["loss_smpl_temporal_pose"] = _reduce(
+            pose_diff, pose_mask, feature_dims=(-1, -2, -3)
+        )
 
     # Supervise root *motion* rather than forcing the absolute cam0-frame root
     # orientation to be constant.  Comparing relative SO(3) rotations against
@@ -304,34 +344,17 @@ def compute_temporal_smpl_smoothness(
         )
         pred_root_rot = axis_angle_to_rotmat(pred_root).squeeze(-3)
         gt_root_rot = axis_angle_to_rotmat(gt_root).squeeze(-3)
-        pred_velocity = (
-            pred_root_rot[:, :-1].transpose(-1, -2) @ pred_root_rot[:, 1:]
-        )
-        gt_velocity = (
-            gt_root_rot[:, :-1].transpose(-1, -2) @ gt_root_rot[:, 1:]
-        )
-        root_mask = valid[:, :-1] * valid[:, 1:]
-
-        if int(root_rotation_order) == 1:
-            pred_motion = pred_velocity
-            gt_motion = gt_velocity
-        elif int(root_rotation_order) == 2:
-            if T < 3:
-                pred_motion = gt_motion = None
-            else:
-                pred_motion = (
-                    pred_velocity[:, :-1].transpose(-1, -2)
-                    @ pred_velocity[:, 1:]
-                )
-                gt_motion = (
-                    gt_velocity[:, :-1].transpose(-1, -2)
-                    @ gt_velocity[:, 1:]
-                )
-                root_mask = root_mask[:, :-1] * root_mask[:, 1:]
-        else:
+        try:
+            pred_motion, root_mask = _relative_motion(
+                pred_root_rot, int(root_rotation_order)
+            )
+            gt_motion, _ = _relative_motion(
+                gt_root_rot, int(root_rotation_order)
+            )
+        except ValueError as exc:
             raise ValueError(
                 f"Unsupported temporal root rotation order: {root_rotation_order}"
-            )
+            ) from exc
 
         if pred_motion is not None:
             root_angle = rotation_geodesic_angle(pred_motion, gt_motion)

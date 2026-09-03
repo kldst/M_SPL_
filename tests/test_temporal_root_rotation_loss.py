@@ -175,3 +175,29 @@ class TemporalGtDeltaLossTest(unittest.TestCase):
         )
 
 
+
+    def test_pose_gt_delta_matches_the_root_formulation(self):
+        """A joint moving exactly like the root must yield the same geodesic
+        motion error, up to the 1/23 average over the non-root joints."""
+        gt_pose = torch.zeros(1, 3, 1, 72)
+        pred_pose = torch.zeros(1, 3, 1, 72)
+        gt_traj = torch.tensor([0.0, 0.25, 0.6])
+        pred_traj = torch.tensor([0.0, 0.55, 0.6])
+        # dims 0:3 -> root, dims 3:6 -> joint 1 (first non-root joint)
+        for base in (0, 3):
+            gt_pose[0, :, 0, base + 1] = gt_traj
+            pred_pose[0, :, 0, base + 1] = pred_traj
+        predictions, batch = self._inputs(pred_pose, gt_pose)
+
+        losses = compute_temporal_smpl_smoothness(
+            predictions,
+            batch,
+            pose_use_gt_delta=True,
+            pose_order=1,
+            root_rotation_order=1,
+        )
+
+        root = float(losses["loss_smpl_temporal_root_rotation"])
+        pose = float(losses["loss_smpl_temporal_pose"])
+        self.assertGreater(root, 1e-3)
+        self.assertAlmostEqual(pose, root / 23.0, places=6)

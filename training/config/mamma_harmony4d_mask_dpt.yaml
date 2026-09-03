@@ -176,11 +176,16 @@ temporal_training:
   root_rotation_order: 1
   root_rotation_loss_type: l1
   # Supervise relative motion against GT instead of driving the finite
-  # difference to zero, matching what root_rotation already does. The operator
-  # and order stay the same; only the target changes (0 -> GT's own delta), so
-  # real articulation / real translation are no longer penalized while
-  # prediction-only jitter still is.
+  # difference to zero, so real articulation / real translation are no longer
+  # penalized while prediction-only jitter still is.
+  # pose_use_gt_delta uses the SAME formulation as root_rotation above:
+  # per-joint relative SO(3) motion compared by geodesic angle. That moves the
+  # term into radians (~2.9x the old rotmat-L1 scale), so temporal_training's
+  # own weight_pose below is effectively ~3x stronger than in the smoothness
+  # form. This does NOT touch loss.smpl.weight_pose (the framewise pose loss).
   pose_use_gt_delta: true
+  # Translation is already Euclidean, so this only retargets the existing
+  # finite difference from 0 to GT's delta; scale and weight are unchanged.
   mesh_translate_use_gt_delta: true
   weight_pose: 0.05
   weight_beta: 0.01
