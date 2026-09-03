@@ -1,0 +1,26 @@
+{
+  "pipeline": "MAMMA official (ma_masks + ma_2d + ma_3d)",
+  "tag": "eval_dance_8view_full",
+  "dataset": "/train-data-3-hdd/yian/Multi_SMPL_0706/MAMMA_eval_dance/test",
+  "total_predicted_frames": 6231,
+  "sampled_frames": 200,
+  "sampling": "uniform over all predicted frames (np.linspace, deterministic)",
+  "evaluated_sequences": 18,
+  "matched_people": 400,
+  "person_matching": "fixed permutation per sequence (MAMMA body_id tracks held to their own identity), chosen by sequence-total absolute 24-joint error",
+  "frames_where_per_frame_optimum_disagrees": 6,
+  "sequences_with_surplus_tracks": {
+    "250225_WestCoastSwing_Same_Side_Whip_03675_03676_1": 1,
+    "250225_WestCoastSwing_Left_Side_Pass_03675_03676_1": 1
+  },
+  "absolute_mpjpe_mm": 40.37137521060249,
+  "root_aligned_mpjpe_mm": 27.08311007616607,
+  "absolute_vpe_mm": 41.960397097992036,
+  "absolute_mpjpe_median_mm": 20.70962105367224,
+  "absolute_mpjpe_p95_mm": 40.013600253169315,
+  "absolute_mpjpe_max_frame_mm": 972.4306003007928,
+  "joint_count_per_person": 24,
+  "vertex_count_per_person": 10475,
+  "joint_definition": "24 joints regressed from SMPL-X vertices, no alignment",
+  "per_frame_csv": "/train-data-3-hdd/yian/Multi_SMPL_temporal/eval/eval_results/mamma_official_absolute_mpjpe_200frames_fixedid.csv"
+}

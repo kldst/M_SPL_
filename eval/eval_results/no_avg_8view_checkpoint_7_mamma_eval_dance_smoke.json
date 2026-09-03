@@ -1,0 +1,144 @@
+{
+  "config": "mamma_mask_dpt",
+  "checkpoint": "/train-data-3-hdd/yian/Multi_SMPL_0706/model/no_avg_8view_continue/checkpoint_7.pt",
+  "checkpoint_bytes": 7159087662,
+  "dataset": "/train-data-3-hdd/yian/Multi_SMPL_0706/MAMMA_eval_dance/test",
+  "image_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "view_names": [
+    "IOI_01",
+    "IOI_02",
+    "IOI_03",
+    "IOI_04",
+    "IOI_05",
+    "IOI_06",
+    "IOI_07",
+    "IOI_08"
+  ],
+  "inference_mode": "framewise",
+  "temporal_frames": 1,
+  "feature_cache": false,
+  "causal_padding": null,
+  "selection_mode": "topk_gt",
+  "discovered_frames": 6231,
+  "evaluated_frames": 3,
+  "successful_frames": 3,
+  "failed_frames": 0,
+  "sequence_count": 18,
+  "sequences": [
+    {
+      "name": "250225_WestCoastSwing_Basic_Whip_03675_03676_1",
+      "start": 0,
+      "end": 224
+    },
+    {
+      "name": "250225_WestCoastSwing_Improv02_03675_03676_1",
+      "start": 225,
+      "end": 974
+    },
+    {
+      "name": "250225_WestCoastSwing_Improv05_03675_03676_1",
+      "start": 975,
+      "end": 1680
+    },
+    {
+      "name": "250225_WestCoastSwing_Improv08_03675_03676_1",
+      "start": 1681,
+      "end": 2430
+    },
+    {
+      "name": "250225_WestCoastSwing_Improv12_03675_03676_1",
+      "start": 2431,
+      "end": 3180
+    },
+    {
+      "name": "250225_WestCoastSwing_Improv22_03675_03676_1",
+      "start": 3181,
+      "end": 3243
+    },
+    {
+      "name": "250225_WestCoastSwing_Left_Side_Pass_03675_03676_1",
+      "start": 3244,
+      "end": 3503
+    },
+    {
+      "name": "250225_WestCoastSwing_Outside_Turn_03675_03676_1",
+      "start": 3504,
+      "end": 3642
+    },
+    {
+      "name": "250225_WestCoastSwing_Outside_Turn_03675_03676_2_1",
+      "start": 3643,
+      "end": 3831
+    },
+    {
+      "name": "250225_WestCoastSwing_Roll_In_Out_03675_03676_1",
+      "start": 3832,
+      "end": 4100
+    },
+    {
+      "name": "250225_WestCoastSwing_Roll_In_Out_03675_03676_2_1",
+      "start": 4101,
+      "end": 4370
+    },
+    {
+      "name": "250225_WestCoastSwing_Same_Side_Whip_03675_03676_1",
+      "start": 4371,
+      "end": 4674
+    },
+    {
+      "name": "250225_WestCoastSwing_Same_Side_Whip_03675_03676_2_1",
+      "start": 4675,
+      "end": 4927
+    },
+    {
+      "name": "250225_WestCoastSwing_Same_Side_Whip_03675_03676_3_1",
+      "start": 4928,
+      "end": 5194
+    },
+    {
+      "name": "250225_WestCoastSwing_Sugar_Push_03675_03676_1",
+      "start": 5195,
+      "end": 5565
+    },
+    {
+      "name": "250225_WestCoastSwing_Sugar_Tuck_03675_03676_2_1",
+      "start": 5566,
+      "end": 5815
+    },
+    {
+      "name": "250225_WestCoastSwing_Sugar_Turn_03675_03676_1",
+      "start": 5816,
+      "end": 6006
+    },
+    {
+      "name": "250225_WestCoastSwing_Underarm_Turn_03675_03676_1",
+      "start": 6007,
+      "end": 6230
+    }
+  ],
+  "gt_people": 6,
+  "selected_predicted_people": 6,
+  "matched_people": 6,
+  "mpjpe_root_aligned_mm": 41.741144770186374,
+  "vpe_pelvis_aligned_mm": 50.16167809524535,
+  "joint_error_samples": 144,
+  "vertex_error_samples": 41340,
+  "joint_count_per_person": 24,
+  "vertex_count_per_person": 6890,
+  "model_inference_seconds": 1.2202783819520846,
+  "mean_model_inference_seconds_per_frame": 0.40675946065069485,
+  "elapsed_seconds": 2.4206073730019853,
+  "mean_end_to_end_seconds_per_frame": 0.806869124333995,
+  "per_frame_csv": "/train-data-3-hdd/yian/Multi_SMPL_temporal/eval/eval_results/no_avg_8view_checkpoint_7_mamma_eval_dance_smoke.csv",
+  "metric_note": "Top-k slots (k=GT people) are Hungarian-matched by root-aligned first-24-joint error. MPJPE uses those 24 SMPL joints; VPE uses every SMPL vertex. Both subtract joint-0 pelvis translation. GT is rotated into camera-0 orientation for this mesh_rot checkpoint. Values are millimetres.",
+  "config_scale_by_extrinsics": false
+}

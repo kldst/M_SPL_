@@ -1,0 +1,80 @@
+{
+  "device": "NVIDIA GeForce RTX 4090",
+  "torch": "2.3.1+cu121",
+  "checkpoint": "/train-data-3-hdd/yian/Multi_SMPL_temporal/model/root/checkpoint_30.pt",
+  "checkpoint_bytes": 7158881966,
+  "config": "mamma_harmony4d_mask_dpt",
+  "temporal_frames": 3,
+  "views_per_frame": 8,
+  "cache": "rolling final aggregator tokens for previous two frames",
+  "output_endpoint": "SMPL pose/beta/translation/presence in CPU memory",
+  "model_load_seconds_excluded_from_latency": 89.82335418695584,
+  "cold_first_frame": {
+    "frame": "runs_00000",
+    "jpeg_preprocess_seconds": 0.47077651298604906,
+    "host_to_gpu_seconds": 0.0019384999759495258,
+    "current_frame_aggregator_seconds": 4.114408298977651,
+    "cached_temporal_head_seconds": 0.8321338940877467,
+    "smpl_output_to_cpu_seconds": 0.0001640890259295702,
+    "model_forward_seconds": 4.946542193065397,
+    "input_jpegs_to_smpl_cpu_seconds": 5.419992915005423
+  },
+  "warmup_frames_excluded": 10,
+  "benchmark_frames": 100,
+  "first_benchmark_frame": "runs_00011",
+  "last_benchmark_frame": "runs_00110",
+  "steady_state_seconds": {
+    "jpeg_preprocess_seconds": {
+      "mean": 0.37328400269383566,
+      "median": 0.3575379980029538,
+      "p95": 0.510917369776871,
+      "min": 0.2359376570675522,
+      "max": 0.6306385460775346
+    },
+    "host_to_gpu_seconds": {
+      "mean": 0.0015852496167644858,
+      "median": 0.0013717320398427546,
+      "p95": 0.002306111785583198,
+      "min": 0.0010769549990072846,
+      "max": 0.008607979980297387
+    },
+    "current_frame_aggregator_seconds": {
+      "mean": 0.24643776032491588,
+      "median": 0.23681601602584124,
+      "p95": 0.2660023689677473,
+      "min": 0.235389920999296,
+      "max": 0.268172616022639
+    },
+    "cached_temporal_head_seconds": {
+      "mean": 0.015220477047841996,
+      "median": 0.014476991025730968,
+      "p95": 0.02144520213478245,
+      "min": 0.014377968036569655,
+      "max": 0.023887003073468804
+    },
+    "smpl_output_to_cpu_seconds": {
+      "mean": 0.0001911052968353033,
+      "median": 0.00016152503667399287,
+      "p95": 0.0003544801438692956,
+      "min": 0.0001024029916152358,
+      "max": 0.0010852210689336061
+    },
+    "model_forward_seconds": {
+      "mean": 0.26165823737275784,
+      "median": 0.2518792690243572,
+      "p95": 0.28152487939223647,
+      "min": 0.24978622503113002,
+      "max": 0.28283726796507835
+    },
+    "input_jpegs_to_smpl_cpu_seconds": {
+      "mean": 0.6372180746064987,
+      "median": 0.623156181012746,
+      "p95": 0.7820776723499875,
+      "min": 0.5170594489900395,
+      "max": 0.8907800979213789
+    }
+  },
+  "model_baseline_allocated_mib": 3637.3486328125,
+  "peak_allocated_mib": 7634.65185546875,
+  "peak_increment_over_model_mib": 3997.30322265625
+}

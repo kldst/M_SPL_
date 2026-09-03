@@ -1,0 +1,89 @@
+{
+  "device": "NVIDIA GeForce RTX 4090",
+  "torch": "2.3.1+cu121",
+  "checkpoint": "/train-data-3-hdd/yian/Multi_SMPL_temporal/model/root/checkpoint_30.pt",
+  "checkpoint_bytes": 7158881966,
+  "config": "mamma_harmony4d_mask_dpt",
+  "temporal_frames": 3,
+  "views_per_frame": 8,
+  "cache": "rolling final aggregator tokens for previous two frames",
+  "output_endpoint": "SMPL pose/beta/translation/presence in CPU memory plus person masks on GPU",
+  "person_mask_decoder_included": true,
+  "model_load_seconds_excluded_from_latency": 7.983759296010248,
+  "cold_first_frame": {
+    "frame": "runs_00000",
+    "jpeg_preprocess_seconds": 0.2543908510124311,
+    "host_to_gpu_seconds": 0.003717017942108214,
+    "current_frame_aggregator_seconds": 0.7016198340570554,
+    "cached_temporal_head_seconds": 0.12091361894272268,
+    "person_mask_head_seconds": 0.22064548102207482,
+    "smpl_output_to_cpu_seconds": 0.0006301810499280691,
+    "model_forward_seconds": 1.043178934021853,
+    "input_jpegs_to_smpl_cpu_seconds": 1.3033441220177338
+  },
+  "warmup_frames_excluded": 10,
+  "benchmark_frames": 50,
+  "first_benchmark_frame": "runs_00011",
+  "last_benchmark_frame": "runs_00060",
+  "steady_state_seconds": {
+    "jpeg_preprocess_seconds": {
+      "mean": 0.21731181013863535,
+      "median": 0.23744739894755185,
+      "p95": 0.25661471429630184,
+      "min": 0.16789525200147182,
+      "max": 0.2592626210534945
+    },
+    "host_to_gpu_seconds": {
+      "mean": 0.0027889151824638247,
+      "median": 0.0028408969519659877,
+      "p95": 0.004919407446868716,
+      "min": 0.001134305028244853,
+      "max": 0.009419173002243042
+    },
+    "current_frame_aggregator_seconds": {
+      "mean": 0.24096655098488554,
+      "median": 0.24122202553553507,
+      "p95": 0.24659301800420508,
+      "min": 0.23570467194076627,
+      "max": 0.24705216090660542
+    },
+    "cached_temporal_head_seconds": {
+      "mean": 0.015063424182590096,
+      "median": 0.01501945301424712,
+      "p95": 0.015981353039387615,
+      "min": 0.014340301044285297,
+      "max": 0.016288882005028427
+    },
+    "person_mask_head_seconds": {
+      "mean": 0.07910222321981564,
+      "median": 0.07892830506898463,
+      "p95": 0.08203093099873512,
+      "min": 0.07709764293394983,
+      "max": 0.08277105609886348
+    },
+    "smpl_output_to_cpu_seconds": {
+      "mean": 0.00039182650158181787,
+      "median": 0.00037326046731323004,
+      "p95": 0.000819199695251882,
+      "min": 0.00010908592958003283,
+      "max": 0.0012133050477132201
+    },
+    "model_forward_seconds": {
+      "mean": 0.3351321983872913,
+      "median": 0.33626269857631996,
+      "p95": 0.342675381276058,
+      "min": 0.327311965986155,
+      "max": 0.34390273003373295
+    },
+    "input_jpegs_to_smpl_cpu_seconds": {
+      "mean": 0.556703460861463,
+      "median": 0.5819861560012214,
+      "p95": 0.6010850809107069,
+      "min": 0.4972844199510291,
+      "max": 0.6066685189725831
+    }
+  },
+  "model_baseline_allocated_mib": 3763.53466796875,
+  "peak_allocated_mib": 8044.68603515625,
+  "peak_increment_over_model_mib": 4281.1513671875
+}

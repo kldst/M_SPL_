@@ -1,0 +1,21 @@
+{
+  "pipeline": "MAMMA official (ma_masks + ma_2d + ma_3d)",
+  "tag": "eval_dance_8view_full",
+  "dataset": "/train-data-3-hdd/yian/Multi_SMPL_0706/MAMMA_eval_dance/test",
+  "total_predicted_frames": 6231,
+  "sampled_frames": 200,
+  "sampling": "uniform over all predicted frames (np.linspace, deterministic)",
+  "evaluated_sequences": 18,
+  "matched_people": 400,
+  "person_matching": "Hungarian on absolute 24-joint error",
+  "absolute_mpjpe_mm": 27.976916561946123,
+  "root_aligned_mpjpe_mm": 21.675945161387762,
+  "absolute_vpe_mm": 30.410176344716287,
+  "absolute_mpjpe_median_mm": 20.70962105367224,
+  "absolute_mpjpe_p95_mm": 40.013600253169315,
+  "absolute_mpjpe_max_frame_mm": 662.7493671739627,
+  "joint_count_per_person": 24,
+  "vertex_count_per_person": 10475,
+  "joint_definition": "24 joints regressed from SMPL-X vertices, no alignment",
+  "per_frame_csv": "/train-data-3-hdd/yian/Multi_SMPL_temporal/eval/eval_results/mamma_official_absolute_mpjpe_200frames.csv"
+}

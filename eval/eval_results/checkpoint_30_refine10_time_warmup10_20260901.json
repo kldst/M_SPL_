@@ -1,0 +1,15 @@
+{
+  "bundle": "/train-data-3-hdd/yian/Multi_SMPL_temporal/debug/0830_mask_translate_refine/mamma_dance_ck30_8view/mask_refine_bundle.npz",
+  "device": "cuda",
+  "iterations": 10,
+  "warmup_frames_excluded": 10,
+  "benchmark_frames": 50,
+  "scope": "per-frame mask targets, distance transform, and 10-step translation optimization",
+  "seconds_per_frame": {
+    "mean": 0.09410969934891909,
+    "median": 0.09109000698663294,
+    "p95": 0.10613365338067524,
+    "min": 0.08512194303330034,
+    "max": 0.117073715897277
+  }
+}

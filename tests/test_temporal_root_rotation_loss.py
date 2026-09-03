@@ -84,3 +84,94 @@ class TemporalRootRotationLossTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TemporalGtDeltaLossTest(unittest.TestCase):
+    """pose_use_gt_delta / mesh_translate_use_gt_delta switch the finite
+    difference target from 0 to GT's own finite difference."""
+
+    @staticmethod
+    def _inputs(pred_pose_BTP72, gt_pose_BTP72, pred_trans=None, gt_trans=None):
+        B, T, P, _ = pred_pose_BTP72.shape
+        predictions = {
+            "smpl_pose": pred_pose_BTP72.reshape(B * T, P, 72).clone().requires_grad_()
+        }
+        batch = {
+            "smpl_pose": gt_pose_BTP72.reshape(B * T, P, 72),
+            "has_smpl": torch.ones(B * T, P),
+            "temporal_shape": torch.tensor([B, T]),
+        }
+        if pred_trans is not None:
+            predictions["mesh_translate"] = (
+                pred_trans.reshape(B * T, P, 3).clone().requires_grad_()
+            )
+            batch["mesh_translate"] = gt_trans.reshape(B * T, P, 3)
+        return predictions, batch
+
+    def test_pose_gt_delta_is_zero_when_prediction_tracks_gt_motion(self):
+        # A genuinely articulating (constant-acceleration) elbow: the plain
+        # order-2 smoothness prior penalizes it, GT-delta supervision does not.
+        pose = torch.zeros(1, 3, 1, 72)
+        pose[0, :, 0, 12] = torch.tensor([0.0, 0.2, 0.8])
+        predictions, batch = self._inputs(pose, pose)
+
+        smooth = compute_temporal_smpl_smoothness(predictions, batch)
+        gt_delta = compute_temporal_smpl_smoothness(
+            predictions, batch, pose_use_gt_delta=True
+        )
+
+        self.assertGreater(float(smooth["loss_smpl_temporal_pose"]), 1e-4)
+        self.assertLess(float(gt_delta["loss_smpl_temporal_pose"]), 1e-6)
+
+    def test_pose_gt_delta_still_penalizes_prediction_only_jitter(self):
+        gt_pose = torch.zeros(1, 3, 1, 72)
+        gt_pose[0, :, 0, 12] = torch.tensor([0.0, 0.2, 0.4])
+        pred_pose = gt_pose.clone()
+        pred_pose[0, 1, 0, 12] = 1.1  # off-trajectory middle frame
+        predictions, batch = self._inputs(pred_pose, gt_pose)
+
+        loss = compute_temporal_smpl_smoothness(
+            predictions, batch, pose_use_gt_delta=True
+        )["loss_smpl_temporal_pose"]
+
+        self.assertGreater(float(loss), 1e-3)
+        loss.backward()
+        self.assertTrue(torch.isfinite(predictions["smpl_pose"].grad).all())
+
+    def test_mesh_translate_gt_delta_ignores_real_acceleration(self):
+        pose = torch.zeros(1, 3, 1, 72)
+        trans = torch.zeros(1, 3, 1, 3)
+        trans[0, :, 0, 0] = torch.tensor([0.0, 0.1, 0.4])  # accelerating walk
+        predictions, batch = self._inputs(pose, pose, trans, trans)
+
+        smooth = compute_temporal_smpl_smoothness(predictions, batch)
+        gt_delta = compute_temporal_smpl_smoothness(
+            predictions, batch, mesh_translate_use_gt_delta=True
+        )
+
+        self.assertAlmostEqual(
+            float(smooth["loss_smpl_temporal_mesh_translate"]), 0.2 / 3, places=5
+        )
+        self.assertLess(
+            float(gt_delta["loss_smpl_temporal_mesh_translate"]), 1e-7
+        )
+
+    def test_mesh_translate_gt_delta_penalizes_wrong_motion(self):
+        pose = torch.zeros(1, 3, 1, 72)
+        gt_trans = torch.zeros(1, 3, 1, 3)
+        gt_trans[0, :, 0, 0] = torch.tensor([0.0, 0.1, 0.2])
+        pred_trans = gt_trans.clone()
+        pred_trans[0, 1, 0, 0] = 0.7
+        predictions, batch = self._inputs(pose, pose, pred_trans, gt_trans)
+
+        loss = compute_temporal_smpl_smoothness(
+            predictions, batch, mesh_translate_use_gt_delta=True
+        )["loss_smpl_temporal_mesh_translate"]
+
+        self.assertGreater(float(loss), 0.3)
+        loss.backward()
+        self.assertTrue(
+            torch.isfinite(predictions["mesh_translate"].grad).all()
+        )
+
+

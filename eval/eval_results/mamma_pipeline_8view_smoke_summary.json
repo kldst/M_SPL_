@@ -1,0 +1,13 @@
+{
+  "pipeline": "MAMMA ma_masks + ma_2d + ma_3d",
+  "tag": "eval_dance_8view_smoke",
+  "evaluated_frames": 30,
+  "evaluated_sequences": 1,
+  "matched_people": 60,
+  "mpjpe_root_aligned_mm": 20.64915593875261,
+  "vpe_pelvis_aligned_mm": 24.645233154198802,
+  "joint_count_per_person": 24,
+  "vertex_count_per_person": 10475,
+  "joint_definition": "24 joints regressed from SMPL-X vertices",
+  "per_frame_csv": "/train-data-3-hdd/yian/Multi_SMPL_temporal/eval/eval_results/mamma_pipeline_8view_smoke_summary.csv"
+}

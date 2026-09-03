@@ -146,6 +146,7 @@ def load_model(
     config_name: str,
     checkpoint_path: Path,
     device: torch.device,
+    keep_person_mask: bool = False,
 ):
     with initialize_config_dir(
         version_base=None,
@@ -191,13 +192,15 @@ def load_model(
         )
 
     # Camera and SMPL heads are required.  Dense outputs are unnecessary here.
-    for head_name in (
+    disabled_heads = [
         "depth_head",
         "point_head",
         "track_head",
-        "person_mask_head",
         "smpl_dense_landmark_head",
-    ):
+    ]
+    if not keep_person_mask:
+        disabled_heads.append("person_mask_head")
+    for head_name in disabled_heads:
         if hasattr(model, head_name):
             setattr(model, head_name, None)
 

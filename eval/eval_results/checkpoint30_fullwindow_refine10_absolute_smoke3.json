@@ -1,0 +1,28 @@
+{
+  "method": "checkpoint_30 + predicted-mask translation refine",
+  "inference_route": "full causal window: 3 frames x 8 views jointly",
+  "body_model": "MAMMA SMPL-X (10475 vertices)",
+  "checkpoint": "/train-data-3-hdd/yian/Multi_SMPL_temporal/model/root/checkpoint_30.pt",
+  "views": [
+    "IOI_01",
+    "IOI_02",
+    "IOI_03",
+    "IOI_04",
+    "IOI_05",
+    "IOI_06",
+    "IOI_07",
+    "IOI_08"
+  ],
+  "frames": 3,
+  "sequences": 1,
+  "people": 6,
+  "iterations": 10,
+  "smooth_sigma_frames": 5.0,
+  "xy_guard_m": 0.05,
+  "z_guard_m": 0.6,
+  "absolute_mpjpe_original_mm": 335.3987087673611,
+  "absolute_mpjpe_refined_mm": 141.80105251736111,
+  "root_aligned_mpjpe_mm": 70.38328043619792,
+  "per_frame_csv": "/train-data-3-hdd/yian/Multi_SMPL_temporal/eval/eval_results/checkpoint30_fullwindow_refine10_absolute_smoke3.csv",
+  "elapsed_seconds_this_run": 91.68268942832947
+}

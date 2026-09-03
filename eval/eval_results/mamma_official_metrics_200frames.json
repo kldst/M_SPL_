@@ -1,0 +1,33 @@
+{
+  "metric_source": "optimization/run_ma_3d.py::process_results (official definitions)",
+  "tag": "eval_dance_8view_full",
+  "total_predicted_frames": 6231,
+  "sampled_frames": 200,
+  "evaluated_sequences": 18,
+  "person_correspondence": "fixed permutation per sequence (run was use_gt=False)",
+  "sequences_with_surplus_tracks": {
+    "250225_WestCoastSwing_Left_Side_Pass_03675_03676_1": 1,
+    "250225_WestCoastSwing_Same_Side_Whip_03675_03676_1": 1
+  },
+  "joint_set": "SMPL-X body joints 0..21",
+  "units": "mm",
+  "mpjpe": 40.9545169623124,
+  "mpjpe_ra": 25.825216052537954,
+  "mpjpe_pa": 19.261562807871066,
+  "pve": 41.96039709799203,
+  "pve_ra": 30.74287539060752,
+  "pve_pa": 19.954050579651195,
+  "pve_no_hands": 42.08775391536583,
+  "pve_pa_no_hands": 18.968930645979437,
+  "root_translation_error": 35.853048143907074,
+  "mpjpe_median": 20.93204122816492,
+  "mpjpe_ra_median": 17.461415396591956,
+  "mpjpe_pa_median": 14.568011986381691,
+  "pve_median": 23.68629165530845,
+  "pve_ra_median": 20.519041127229627,
+  "pve_pa_median": 15.38177365775545,
+  "pve_no_hands_median": 23.03271638721663,
+  "pve_pa_no_hands_median": 14.917545199482923,
+  "root_translation_error_median": 17.283077205875234,
+  "per_frame_csv": "/train-data-3-hdd/yian/Multi_SMPL_temporal/eval/eval_results/mamma_official_metrics_200frames.csv"
+}

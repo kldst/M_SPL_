@@ -205,15 +205,25 @@ def compute_temporal_smpl_smoothness(
     exclude_root: bool = True,
     root_rotation_order: int = 1,
     root_rotation_loss_type: str = "l1",
+    pose_use_gt_delta: bool = False,
+    mesh_translate_use_gt_delta: bool = False,
 ):
     """Temporal regularizers on Hungarian-matched, identity-ordered people.
 
     Inputs remain framewise ``[B*T,P,...]`` for compatibility with the existing
     loss. ``batch['temporal_shape'] == [B,T]`` is the sole opt-in marker.
     Missing people are removed with products of ``has_smpl`` over every frame in
-    the finite-difference stencil. Local pose/beta/translation terms are
-    prediction smoothness priors; the root term instead supervises predicted
-    relative SO(3) motion against GT so that intentional turns are not suppressed.
+    the finite-difference stencil. The root term supervises predicted relative
+    SO(3) motion against GT so that intentional turns are not suppressed.
+
+    Local pose / mesh translation default to prediction-only smoothness priors
+    (the finite difference is driven to zero). ``pose_use_gt_delta`` and
+    ``mesh_translate_use_gt_delta`` switch them to the same relative-motion
+    supervision the root uses: the target of the finite difference becomes GT's
+    own finite difference instead of zero, so real articulation and real
+    translation are no longer penalized. The operator, order and weight scale
+    are unchanged, so the GT-delta form degenerates to the smoothness form
+    wherever GT is already static.
     """
     pred_pose = predictions["smpl_pose"]
     zero = pred_pose.sum() * 0.0
@@ -262,9 +272,23 @@ def compute_temporal_smpl_smoothness(
         mask = mask.to(value.dtype)
         return (value * mask).sum() / mask.sum().clamp(min=1.0)
 
-    pose = pred_pose[:, :P, 3 if exclude_root else 0 :72].reshape(B, T, P, -1)
+    pose_slice = slice(3 if exclude_root else 0, 72)
+    pose = pred_pose[:, :P, pose_slice].reshape(B, T, P, -1)
     pose_rot = axis_angle_to_rotmat(pose)
     pose_diff, pose_mask = _difference(pose_rot, int(pose_order))
+    if pose_use_gt_delta and pose_diff is not None:
+        gt_pose_all = batch.get("smpl_pose")
+        if gt_pose_all is None:
+            raise KeyError(
+                "temporal pose_use_gt_delta requires batch['smpl_pose']"
+            )
+        gt_pose_local = gt_pose_all[:, :P, pose_slice].reshape(B, T, P, -1).to(
+            device=pose.device, dtype=pose.dtype
+        )
+        gt_pose_diff, _ = _difference(
+            axis_angle_to_rotmat(gt_pose_local), int(pose_order)
+        )
+        pose_diff = pose_diff - gt_pose_diff
     result["loss_smpl_temporal_pose"] = _reduce(
         pose_diff, pose_mask, feature_dims=(-1, -2, -3)
     )
@@ -340,6 +364,18 @@ def compute_temporal_smpl_smoothness(
         trans_diff, trans_mask = _difference(
             translate, int(mesh_translate_order)
         )
+        if mesh_translate_use_gt_delta and trans_diff is not None:
+            gt_translate = batch.get("mesh_translate")
+            if gt_translate is None:
+                raise KeyError(
+                    "temporal mesh_translate_use_gt_delta requires "
+                    "batch['mesh_translate'] (derived in compute_smpl_loss)"
+                )
+            gt_trans = gt_translate[:, :P].reshape(B, T, P, 3).to(
+                device=translate.device, dtype=translate.dtype
+            )
+            gt_trans_diff, _ = _difference(gt_trans, int(mesh_translate_order))
+            trans_diff = trans_diff - gt_trans_diff
         result["loss_smpl_temporal_mesh_translate"] = _reduce(
             trans_diff, trans_mask, feature_dims=-1
         )
@@ -374,6 +410,8 @@ def compute_smpl_loss(
     temporal_exclude_root: bool = True,
     temporal_root_rotation_order: int = 1,
     temporal_root_rotation_loss_type: str = "l1",
+    temporal_pose_use_gt_delta: bool = False,
+    temporal_mesh_translate_use_gt_delta: bool = False,
     use_gt: bool = False,
     # Standalone: use the GT (cam0-normalized) camera ONLY for the joints2d
     # reprojection loss, WITHOUT the full use_gt swap of pose/beta/trans/mesh_translate.
@@ -481,6 +519,8 @@ def compute_smpl_loss(
                 exclude_root=temporal_exclude_root,
                 root_rotation_order=temporal_root_rotation_order,
                 root_rotation_loss_type=temporal_root_rotation_loss_type,
+                pose_use_gt_delta=temporal_pose_use_gt_delta,
+                mesh_translate_use_gt_delta=temporal_mesh_translate_use_gt_delta,
             )
 
         B_people, P_people = predictions["smpl_pose"].shape[:2]

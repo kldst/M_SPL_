@@ -1,0 +1,26 @@
+{
+  "method": "checkpoint_30 + predicted-mask translation refine",
+  "checkpoint": "/train-data-3-hdd/yian/Multi_SMPL_temporal/model/root/checkpoint_30.pt",
+  "views": [
+    "IOI_01",
+    "IOI_02",
+    "IOI_03",
+    "IOI_04",
+    "IOI_05",
+    "IOI_06",
+    "IOI_07",
+    "IOI_08"
+  ],
+  "frames": 6231,
+  "sequences": 18,
+  "people": 12462,
+  "iterations": 10,
+  "smooth_sigma_frames": 5.0,
+  "xy_guard_m": 0.05,
+  "z_guard_m": 0.6,
+  "absolute_mpjpe_original_mm": 370.28862575563045,
+  "absolute_mpjpe_refined_mm": 133.34145949519873,
+  "root_aligned_mpjpe_mm": 57.30742558941683,
+  "per_frame_csv": "/train-data-3-hdd/yian/Multi_SMPL_temporal/eval/eval_results/checkpoint30_mask_refine10_absolute.csv",
+  "elapsed_seconds_this_run": 4471.281326532364
+}
