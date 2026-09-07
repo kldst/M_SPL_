@@ -194,6 +194,43 @@ end-to-end train step was NOT run here (loading ~150 large pyds is slow in this
 env) — run one `debug_mode` / small `limit_train_batches` step on the real box to
 confirm.
 
+## Temporal inference: aggregator feature cache (added)
+
+`VGGT.forward` folds the temporal axis into the batch axis before the aggregator
+(`[B,T*V,3,H,W] -> [B*T,V,3,H,W]`, see `use_temporal_path_enabled` in
+`vggt/models/vggt.py`), so global attention never crosses a timestep and frame
+`t`'s tokens depend only on frame `t`'s views. A causal T=3 sliding window
+therefore re-encoded every frame **three times**. `AggregatorTokenCache` +
+`cached_temporal_forward` (both in
+`inference/infer_temporal_smpl_mesh_hungarian_mp4.py`, imported by
+`inference/infer_temporal_topk_mp4.py`) keep the previous `clip_length-1`
+frames' final aggregator tokens and replay them, so each frame is encoded — and
+JPEG-decoded — exactly once.
+
+- On by default in both MP4 scripts; `--no-feature-cache` restores the original
+  re-encode path. `run_ck30_all_sequences.sh` picks the cache up unchanged.
+- All three scripts moved from the repo root into `inference/` (2026-09-07).
+  They import repo-root siblings by plain name, so each now prepends
+  `REPO_DIR = Path(__file__).resolve().parents[1]` to `sys.path` before those
+  imports — the same bootstrap the other `inference/*.py` already used.
+  `eval_checkpoint30_mask_refine_absolute.py` (repo root) gained
+  `sys.path.insert(0, REPO/"inference")` for the same reason.
+- **Verified exact**: with autocast disabled the cached and full-window paths
+  agree bit-for-bit on `smpl_pose` / `smpl_beta` / `mesh_translate` /
+  `smpl_presence_logits` (max abs diff 0.0). Under bf16 autocast they differ by
+  ~1e-2 purely because the aggregator runs at batch 3 vs batch 1 (bf16 eps
+  ~4e-3); `person_mask_logits` differs ~2e-2 in fp32 from batch-dependent cudnn
+  conv algorithm selection, and only matters for `--translate-refine-mask`.
+- Measured on a 4090, T=3/V=8: model forward **0.867 -> 0.284 s/frame (3.05x)**;
+  peak activation memory also drops ~3x, so the cached path still fits when two
+  jobs share one 24GB GPU and the non-cached path OOMs.
+- `inference/eval_mamma_dance_temporal_mpjpe_vpe.py` already cached features; it gained a
+  `FramePrefetcher` (`--prefetch-depth`, default 3) that decodes each frame's
+  JPEGs and GT npz on worker threads. Frame preprocessing costs about as much
+  wall time as the cached forward and uses the CPU rather than the GPU, so
+  reading ahead takes it off the critical path: 0.62 -> 0.42 s/frame end to end,
+  with MPJPE/VPE bit-identical to the sequential path.
+
 ## Running / headless testing
 
 - Launch: `./run_demo_mamma_dance.sh` (or `python demo_gradio_smpl_multi.py --config

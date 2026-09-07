@@ -1,0 +1,51 @@
+{
+  "frame": "world",
+  "source": "HeatFormer make_video.py pass-1 fit, reproduced verbatim",
+  "sequence": "250225_WestCoastSwing_Improv02_03675_03676_1",
+  "pred_dir": "/train-data-3-hdd/yian/HeatFormer/output/mamma_full_gt",
+  "data_root": "/train-data-3-hdd/yian/Multi_SMPL_0706/MAMMA_eval_dance/test",
+  "runs": [
+    "runs_00225",
+    "runs_00974"
+  ],
+  "run_count": 750,
+  "camera_sample": 8,
+  "pred_only": false,
+  "azimuth_deg": 35.0,
+  "elevation_deg": 28.0,
+  "fov_deg": 38.0,
+  "camera": {
+    "eye": [
+      -3.1024751396880395,
+      4.574374843274393,
+      4.168588473060487
+    ],
+    "target": [
+      0.10246229785632405,
+      -0.04880594744573625,
+      0.8730129252011836
+    ],
+    "up": [
+      0.029815673035350296,
+      -0.0294850283990598,
+      0.9991204425602329
+    ],
+    "horizontal_x": [
+      0.0008794983526890797,
+      0.9995652220342136,
+      0.02947190835933398
+    ],
+    "horizontal_z": [
+      -0.9995550270615904,
+      0.0,
+      0.0298286418715854
+    ],
+    "floor_point": [
+      -0.1036080296540994,
+      -0.02876092738905426,
+      -0.010452395351668642
+    ],
+    "grid_extent": 1.9381871182470491,
+    "fov_deg": 38.0
+  }
+}

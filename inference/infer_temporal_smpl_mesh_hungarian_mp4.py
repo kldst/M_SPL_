@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -26,6 +27,13 @@ import torch
 import torch.nn.functional as F
 from omegaconf import OmegaConf
 from scipy.optimize import linear_sum_assignment
+
+# This module lives in inference/; its repo-root siblings (infer_markerless_*,
+# eval_mamma_dance_mpjpe, training/, vggt/) are imported by plain name, so the
+# repo root has to be importable before those imports run.
+REPO_DIR = Path(__file__).resolve().parents[1]
+if str(REPO_DIR) not in sys.path:
+    sys.path.insert(0, str(REPO_DIR))
 
 import infer_markerless_smpl_3d_gif as render3d
 import infer_markerless_smpl_gif as common
@@ -51,6 +59,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--smpl-model", default=None)
     parser.add_argument("--max-frames", type=int, default=225)
+    parser.add_argument(
+        "--start-frame",
+        type=int,
+        default=0,
+        help="Index of the first runs_* directory to use. With --max-frames this "
+             "selects one MAMMA sequence out of the concatenated eval set; the causal "
+             "window is padded from the first selected frame, so each sequence starts "
+             "clean instead of leaking the previous take.",
+    )
     parser.add_argument("--clip-length", type=int, default=3)
     parser.add_argument("--num-input-views", type=int, default=8)
     parser.add_argument("--input-indices", type=int, nargs="+", default=None)
@@ -74,6 +91,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--translate-refine-size", type=int, default=112)
     parser.add_argument("--translate-refine-chamfer-points", type=int, default=100)
     parser.add_argument("--translate-refine-lr", type=float, default=0.1)
+    parser.add_argument(
+        "--feature-cache",
+        dest="feature_cache",
+        action="store_true",
+        default=True,
+        help=(
+            "Encode each frame's views with the aggregator exactly once and keep "
+            "the previous clip_length-1 frames' final tokens in a rolling cache. "
+            "The temporal path folds T into the batch axis, so per-timestep "
+            "encoding is independent and the cached window is numerically the "
+            "same input the full forward would build."
+        ),
+    )
+    parser.add_argument(
+        "--no-feature-cache",
+        dest="feature_cache",
+        action="store_false",
+        help="Re-encode the whole causal window every frame (original path).",
+    )
     return parser.parse_args()
 
 
@@ -367,6 +403,95 @@ def causal_window_indices(frame_index: int, clip_length: int) -> list[int]:
     ]
 
 
+class AggregatorTokenCache:
+    """Rolling cache of final aggregator tokens for the previous frames.
+
+    ``VGGT.forward`` folds the temporal axis into the batch axis before the
+    aggregator (``[B,T*V,...] -> [B*T,V,...]``), so global attention never
+    crosses a timestep and each frame's tokens depend only on that frame's
+    views.  Encoding frame ``t`` once and replaying the stored tokens for
+    ``t-1`` and ``t-2`` therefore reconstructs exactly the tensor the
+    full-window forward would have produced, at 1/clip_length the aggregator
+    and JPEG-decode cost.
+    """
+
+    def __init__(self, clip_length: int) -> None:
+        if clip_length < 1:
+            raise ValueError("clip_length must be >= 1")
+        self.clip_length = int(clip_length)
+        self._tokens: list[torch.Tensor] = []
+
+    def clear(self) -> None:
+        self._tokens.clear()
+
+    def window(self, current: torch.Tensor) -> torch.Tensor:
+        """Build the [T*B, V, N, C] causal window ending at ``current``.
+
+        Warm-up frames repeat the oldest cached frame, which is what
+        ``causal_window_indices`` does by clamping negative indices to the
+        first frame of the run.
+        """
+        history = list(self._tokens)
+        padded = [history[0] if history else current] * (
+            self.clip_length - 1 - len(history)
+        )
+        window = padded + history + [current]
+        if len(window) != self.clip_length:
+            raise AssertionError((len(window), self.clip_length))
+        return torch.cat(window, dim=0)
+
+    def append(self, current: torch.Tensor) -> None:
+        self._tokens.append(current)
+        del self._tokens[: max(0, len(self._tokens) - (self.clip_length - 1))]
+
+
+def cached_temporal_forward(
+    model,
+    cache: AggregatorTokenCache,
+    images: torch.Tensor,
+    smpl_inputs: dict,
+    want_person_mask: bool,
+) -> dict:
+    """One aggregator pass over the current frame + cached temporal head.
+
+    ``images`` holds only the current frame's views, shaped [V,3,H,W].  The
+    returned dict carries the head outputs for the whole cached window, in the
+    same layout ``VGGT.forward`` returns, so ``select_prediction_frame`` picks
+    the current frame the same way in both paths.
+    """
+    if images.ndim == 4:
+        images = images.unsqueeze(0)
+    current_tokens, patch_start_idx, _ = model.aggregator(images)
+    current_final = current_tokens[-1]
+    window_features = [cache.window(current_final)]
+    with torch.cuda.amp.autocast(enabled=False):
+        predictions = dict(
+            model.smpl_multi_query_trans_rot_head(
+                window_features,
+                patch_start_idx=patch_start_idx,
+                smpl_inputs=smpl_inputs,
+            )
+        )
+        if want_person_mask:
+            if model.person_mask_head is None:
+                raise RuntimeError("The loaded model has no person-mask head")
+            if model.person_mask_head_type != "dpt":
+                raise RuntimeError(
+                    "Cached mask decoding supports the DPT mask head only, got "
+                    f"{model.person_mask_head_type}"
+                )
+            # Masks are only consumed for the current frame, so decode the last
+            # window position against the tokens just encoded for it.
+            predictions["person_mask_logits"] = model.person_mask_head(
+                predictions["person_tokens"][-1:],
+                current_tokens,
+                images=images,
+                patch_start_idx=patch_start_idx,
+            )
+    cache.append(current_final.detach())
+    return predictions
+
+
 def load_gt_mesh_in_prediction_gauge(
     archive_path: Path,
     camera_name: str,
@@ -631,8 +756,12 @@ def main() -> None:
         smpl_body._SMPL_MODEL_PATHS["neutral"] = str(smpl_model_path)
 
     frame_dirs = common.discover_frames(
-        dataset_root, args.dataset_split, args.max_frames
-    )
+        dataset_root, args.dataset_split, args.start_frame + args.max_frames
+    )[args.start_frame:]
+    if not frame_dirs:
+        raise ValueError(
+            f"--start-frame {args.start_frame} is past the end of the dataset"
+        )
     first_images = common.list_frame_images(frame_dirs[0])
     input_indices = (
         list(args.input_indices)
@@ -710,12 +839,23 @@ def main() -> None:
     )
     faces = np.asarray(_get_smpl_model(device, "neutral").faces, dtype=np.int64)
 
+    token_cache = AggregatorTokenCache(args.clip_length) if args.feature_cache else None
+    inference_seconds = 0.0
+
     for frame_index, frame_dir in enumerate(frame_dirs):
         window_indices = causal_window_indices(frame_index, args.clip_length)
-        image_paths = []
-        for window_index in window_indices:
-            frame_images = common.list_frame_images(frame_dirs[window_index])
-            image_paths.extend(str(frame_images[index]) for index in input_indices)
+        if token_cache is not None:
+            # Only the current frame is encoded; the window's earlier positions
+            # come from the cache, so their JPEGs are never decoded again.
+            image_paths = [
+                str(common.list_frame_images(frame_dir)[index])
+                for index in input_indices
+            ]
+        else:
+            image_paths = []
+            for window_index in window_indices:
+                frame_images = common.list_frame_images(frame_dirs[window_index])
+                image_paths.extend(str(frame_images[index]) for index in input_indices)
         images = load_and_preprocess_images(image_paths).to(device)
         smpl_inputs = {
             "temporal_num_frames": torch.tensor(
@@ -725,12 +865,27 @@ def main() -> None:
                 [len(input_indices)], device=device, dtype=torch.long
             ),
         }
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        inference_started = time.time()
         with torch.inference_mode(), torch.autocast(
             device_type=device.type,
             dtype=autocast_dtype,
             enabled=autocast_enabled,
         ):
-            predictions = model(images, smpl_inputs=smpl_inputs)
+            if token_cache is not None:
+                predictions = cached_temporal_forward(
+                    model,
+                    token_cache,
+                    images,
+                    smpl_inputs,
+                    want_person_mask=args.translate_refine_mask,
+                )
+            else:
+                predictions = model(images, smpl_inputs=smpl_inputs)
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        inference_seconds += time.time() - inference_started
         frame_predictions = select_prediction_frame(predictions, args.clip_length - 1)
 
         num_slots = int(frame_predictions["smpl_pose"].shape[1])
@@ -1085,6 +1240,22 @@ def main() -> None:
         "temporal_clip_length": args.clip_length,
         "temporal_alignment": "causal sliding window; current frame is final decoder position",
         "temporal_inference_stride": 1,
+        "aggregator_feature_cache": {
+            "enabled": bool(args.feature_cache),
+            "cached_frames": args.clip_length - 1 if args.feature_cache else 0,
+            "note": (
+                "The temporal path folds T into the batch axis, so the aggregator "
+                "sees one timestep at a time and cached tokens are bit-comparable "
+                "to re-encoding. Each frame is encoded and JPEG-decoded once "
+                "instead of clip_length times."
+                if args.feature_cache
+                else "Disabled: the whole causal window is re-encoded every frame."
+            ),
+        },
+        "model_inference_seconds": inference_seconds,
+        "mean_model_inference_seconds_per_frame": (
+            inference_seconds / max(len(frame_dirs), 1)
+        ),
         "training_clip_start_stride": config_clip_stride,
         "input_camera_indices": input_indices,
         "input_camera_names": [first_images[index].stem for index in input_indices],

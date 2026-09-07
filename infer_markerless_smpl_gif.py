@@ -147,6 +147,7 @@ def load_model(
     checkpoint_path: Path,
     device: torch.device,
     keep_person_mask: bool = False,
+    keep_camera: bool = True,
 ):
     with initialize_config_dir(
         version_base=None,
@@ -191,7 +192,7 @@ def load_model(
             f"{critical_missing[0]}"
         )
 
-    # Camera and SMPL heads are required.  Dense outputs are unnecessary here.
+    # The SMPL head is required.  Dense outputs are unnecessary here.
     disabled_heads = [
         "depth_head",
         "point_head",
@@ -200,6 +201,12 @@ def load_model(
     ]
     if not keep_person_mask:
         disabled_heads.append("person_mask_head")
+    if not keep_camera:
+        # 216M params / 825MiB that callers who never read `pose_enc` do not
+        # need. Dropping it cannot change any SMPL output: the camera head is a
+        # sibling of the SMPL head over the same aggregator tokens, and the
+        # cached temporal path never invokes it at all.
+        disabled_heads.append("camera_head")
     for head_name in disabled_heads:
         if hasattr(model, head_name):
             setattr(model, head_name, None)

@@ -23,6 +23,8 @@ import cv2
 
 REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO / "debug/0901_meeting"))
+# The temporal MP4 / MPJPE modules now live in inference/.
+sys.path.insert(0, str(REPO / "inference"))
 # nvdiffrast is shared from the PoseGAM environment; both environments use
 # Python 3.10 and the same CUDA/PyTorch ABI on this machine.
 sys.path.append("/train-data-3-hdd/yian/conda/envs/posegam/lib/python3.10/site-packages")

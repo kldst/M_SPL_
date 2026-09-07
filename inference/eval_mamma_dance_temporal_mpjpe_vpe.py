@@ -13,8 +13,10 @@ import argparse
 import csv
 import json
 import re
+import sys
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -22,13 +24,19 @@ import torch
 from omegaconf import OmegaConf
 from scipy.optimize import linear_sum_assignment
 
+# This module lives in inference/; its repo-root siblings (infer_markerless_*,
+# eval_mamma_dance_mpjpe, training/, vggt/) are imported by plain name, so the
+# repo root has to be importable before those imports run.
+REPO_DIR = Path(__file__).resolve().parents[1]
+if str(REPO_DIR) not in sys.path:
+    sys.path.insert(0, str(REPO_DIR))
+
 import eval_mamma_dance_mpjpe as base
 import training.smpl_body as smpl_body
 from training.loss import _decode_smpl_batch
 from vggt.utils.load_fn import load_and_preprocess_images
 
 
-REPO_DIR = Path(__file__).resolve().parent
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,6 +78,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-frames", type=int, default=None)
     parser.add_argument("--device", default="cuda", choices=("cuda", "cpu"))
     parser.add_argument("--log-every", type=int, default=25)
+    parser.add_argument(
+        "--prefetch-depth",
+        type=int,
+        default=3,
+        help=(
+            "Frames of JPEG/GT decoding to keep read ahead on worker threads. "
+            "Preprocessing costs about as much wall time as the cached forward "
+            "and uses the CPU instead of the GPU, so reading ahead takes it off "
+            "the critical path. 0 disables prefetching."
+        ),
+    )
+    parser.add_argument(
+        "--prefetch-workers",
+        type=int,
+        default=3,
+        help="Worker threads decoding prefetched frames.",
+    )
     parser.add_argument("--fail-fast", action="store_true")
     return parser.parse_args()
 
@@ -136,6 +161,60 @@ def configure_smpl_models(model_dir: Path) -> None:
         {gender: str(path.resolve()) for gender, path in paths.items()}
     )
     smpl_body._SMPL_MODEL_CACHE.clear()
+
+
+class FramePrefetcher:
+    """Decode each frame's views and GT archive ahead of the GPU.
+
+    Order is preserved: ``next()`` returns frames in the order they were
+    given, and a frame that fails to decode raises at the position the
+    sequential code would have failed, so the caller's per-frame error
+    handling is unchanged.
+    """
+
+    def __init__(
+        self,
+        frames: list[Path],
+        image_ids: list[int],
+        data_root: Path,
+        depth: int,
+        workers: int,
+    ) -> None:
+        self._frames = list(frames)
+        self._image_ids = list(image_ids)
+        self._data_root = Path(data_root)
+        self._depth = max(1, int(depth))
+        self._pool = ThreadPoolExecutor(
+            max_workers=max(1, int(workers)), thread_name_prefix="frame-prefetch"
+        )
+        self._pending: deque = deque()
+        self._next_index = 0
+
+    def _decode(self, frame_dir: Path) -> tuple[list[str], torch.Tensor, dict]:
+        image_paths = base.select_frame_images(frame_dir, self._image_ids)
+        gt = base.load_frame_gt(
+            self._data_root / f"{frame_dir.name}.npz", Path(image_paths[0]).stem
+        )
+        return image_paths, load_and_preprocess_images(image_paths), gt
+
+    def _fill(self) -> None:
+        while len(self._pending) < self._depth and self._next_index < len(self._frames):
+            self._pending.append(
+                self._pool.submit(self._decode, self._frames[self._next_index])
+            )
+            self._next_index += 1
+
+    def next(self) -> tuple[list[str], torch.Tensor, dict]:
+        self._fill()
+        if not self._pending:
+            raise IndexError("Prefetch queue is exhausted")
+        future = self._pending.popleft()
+        self._fill()
+        return future.result()
+
+    def close(self) -> None:
+        self._pending.clear()
+        self._pool.shutdown(wait=False, cancel_futures=True)
 
 
 def cached_temporal_forward(
@@ -308,6 +387,13 @@ def main() -> None:
     started = time.perf_counter()
     token_cache: deque = deque(maxlen=2)
     segment_index = 0
+    prefetcher = (
+        FramePrefetcher(
+            frames, image_ids, data_root, args.prefetch_depth, args.prefetch_workers
+        )
+        if args.prefetch_depth > 0
+        else None
+    )
 
     with output_csv.open("w", newline="", encoding="utf-8") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames, extrasaction="ignore")
@@ -328,11 +414,15 @@ def main() -> None:
                 "error": "",
             }
             try:
-                image_paths = base.select_frame_images(frame_dir, image_ids)
-                gt = base.load_frame_gt(
-                    data_root / f"{frame_dir.name}.npz", Path(image_paths[0]).stem
-                )
-                images = load_and_preprocess_images(image_paths).unsqueeze(0).to(device)
+                if prefetcher is not None:
+                    _, images_cpu, gt = prefetcher.next()
+                else:
+                    image_paths = base.select_frame_images(frame_dir, image_ids)
+                    gt = base.load_frame_gt(
+                        data_root / f"{frame_dir.name}.npz", Path(image_paths[0]).stem
+                    )
+                    images_cpu = load_and_preprocess_images(image_paths)
+                images = images_cpu.unsqueeze(0).to(device)
                 if device.type == "cuda":
                     torch.cuda.synchronize(device)
                 infer_started = time.perf_counter()
@@ -365,7 +455,7 @@ def main() -> None:
                 totals["gt"] += int(row["gt_people"])
                 totals["selected"] += int(row["selected_people"])
                 totals["matched"] += int(row["matched_people"])
-                del images, predictions
+                del images, images_cpu, predictions
             except Exception as exc:
                 if args.fail_fast:
                     raise
@@ -393,6 +483,8 @@ def main() -> None:
                     flush=True,
                 )
 
+    if prefetcher is not None:
+        prefetcher.close()
     elapsed = time.perf_counter() - started
     summary = {
         "config": args.config,
@@ -404,6 +496,14 @@ def main() -> None:
         "inference_mode": args.inference_mode,
         "temporal_frames": 3 if args.inference_mode == "cached_temporal" else 1,
         "feature_cache": args.inference_mode == "cached_temporal",
+        "frame_prefetch": {
+            "depth": args.prefetch_depth,
+            "workers": args.prefetch_workers,
+            "note": (
+                "JPEG decode and GT archive loading run on worker threads ahead "
+                "of the GPU; this changes wall time only, not any prediction."
+            ),
+        },
         "causal_padding": (
             "repeat first frame within each sequence"
             if args.inference_mode == "cached_temporal"
